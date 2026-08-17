@@ -44,7 +44,7 @@ npm run build
 
 ## Docker 배포
 
-`Dockerfile`은 Vite 애플리케이션을 빌드한 뒤 Nginx로 정적 파일을 제공하는 multi-stage 이미지입니다. Nginx가 `/api` 요청을 Compose 내부의 `docmesh-doc:8000`으로 전달하므로 브라우저와 API가 같은 origin을 사용합니다.
+`Dockerfile`은 Vite 애플리케이션을 빌드한 뒤 Node 정적 서버로 제공하는 multi-stage 이미지입니다. `server.mjs`가 정적 파일, SPA fallback, `/api` 요청의 Compose 내부 `docmesh-doc:8000` 프록시를 담당하므로 브라우저와 API가 같은 origin을 사용합니다.
 
 배포 전 Docker Engine과 Compose v2를 준비하고, `DOCMESH_IMAGE`로 지정한 DocMesh Document Service 이미지를 로컬 또는 접근 가능한 레지스트리에 준비합니다.
 
@@ -68,4 +68,5 @@ docker compose logs -f web docmesh-doc
 - `src/App.jsx` — 문서 workspace 화면과 관리 interaction
 - `src/api.js` — DocMesh REST API adapter
 - `src/styles.css` — 간결한 카드형 반응형 UI
+- `server.mjs` — production 정적 파일 서버와 `/api` reverse proxy
 - `vite.config.js` — `/api` → `http://docmesh-doc:8000` 개발 프록시

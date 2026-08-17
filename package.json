@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "start": "node server.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "test": "NODE_ENV=test vitest run",
     "test:watch": "NODE_ENV=test vitest"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^4.2.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vite": "latest"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "latest",
