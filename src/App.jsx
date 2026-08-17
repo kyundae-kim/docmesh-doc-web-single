@@ -4,7 +4,6 @@ import {
   deleteDocument,
   downloadDocument,
   getDocumentContentUrl,
-  getReadiness,
   listDocuments,
   uploadDocument,
 } from './api'
@@ -36,8 +35,7 @@ const STATUS_TONES = {
 }
 
 const ICON_PATHS = {
-  grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
-  search: 'm21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
+  search: 'm21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0Z',
   upload: 'M12 16V4m0 0L7 9m5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
   refresh: 'M20 11a8.1 8.1 0 0 0-14.9-3M4 5v4h4m-4 2a8.1 8.1 0 0 0 14.9 3M20 19v-4h-4',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
@@ -240,7 +238,6 @@ export default function App() {
   const [loadError, setLoadError] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [readiness, setReadiness] = useState({ state: 'checking', message: '서비스 확인 중' })
   const [selectedDocument, setSelectedDocument] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -276,18 +273,6 @@ export default function App() {
   useEffect(() => {
     loadDocuments()
   }, [loadDocuments])
-
-  useEffect(() => {
-    let active = true
-    getReadiness().then((payload) => {
-      if (!active) return
-      const ready = payload?.ok !== false && payload?.status !== 'error'
-      setReadiness({ state: ready ? 'ready' : 'error', message: ready ? '서비스 정상' : '서비스 점검 필요' })
-    }).catch(() => {
-      if (active) setReadiness({ state: 'error', message: '서비스 연결 오류' })
-    })
-    return () => { active = false }
-  }, [])
 
   const visibleDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -348,14 +333,8 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><span /></div><span>docmesh</span><small>workspace</small></div>
-        <nav className="primary-nav" aria-label="주 메뉴"><span className="nav-label">WORKSPACE</span><a className="nav-item active" href="#documents"><Icon name="grid" size={18} />문서<span className="nav-count">{documents.length}</span></a></nav>
-        <div className="sidebar-bottom"><div className="service-card"><div className={`service-indicator ${readiness.state}`}><span /></div><div><strong>Document Service</strong><span>{readiness.message}</span></div><Icon name="bolt" size={15} /></div><div className="version-label">DocMesh · v0.5.0</div></div>
-      </aside>
-
       <main className="main-content" id="documents">
-        <header className="page-header"><div><div className="breadcrumb"><span>Workspace</span><Icon name="arrow" size={13} /><span>Documents</span></div><h1>Document library</h1><p>팀의 문서를 한곳에서 간결하게 관리하세요.</p></div><button type="button" className="refresh-button" onClick={() => loadDocuments()} disabled={isLoading || isRefreshing}><Icon name="refresh" size={16} />{isRefreshing ? '새로 고치는 중' : '새로 고침'}</button></header>
+        <header className="page-header"><div className="page-header-main"><div className="service-icon" role="img" aria-label="DocMesh 서비스"><span /></div><div><h1>Document library</h1><p>팀의 문서를 한곳에서 간결하게 관리하세요.</p></div></div><button type="button" className="refresh-button" onClick={() => loadDocuments()} disabled={isLoading || isRefreshing}><Icon name="refresh" size={16} />{isRefreshing ? '새로 고치는 중' : '새로 고침'}</button></header>
 
         <div className="stats-row"><div className="stat-card accent"><span className="stat-label">전체 문서</span><strong>{documents.length}</strong><span className="stat-foot"><Icon name="file" size={13} /> {documents.length === 1 ? '1 document' : `${documents.length} documents`}</span></div><div className="stat-card"><span className="stat-label">사용 가능</span><strong>{availableCount}</strong><span className="stat-foot"><span className="mini-dot green" /> 정상 상태</span></div><div className="stat-card"><span className="stat-label">저장 용량</span><strong>{formatBytes(totalSize)}</strong><span className="stat-foot">현재 문서 기준</span></div><div className="stat-card stat-hint"><div className="hint-icon"><Icon name="bolt" size={17} /></div><div><strong>빠른 시작</strong><span>파일을 업로드해 보세요.</span></div></div></div>
 

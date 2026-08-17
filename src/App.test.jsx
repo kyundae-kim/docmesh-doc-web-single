@@ -70,6 +70,30 @@ describe('DocMesh document workspace', () => {
     expect(screen.queryByText('release-notes.md')).not.toBeInTheDocument()
   })
 
+  it('does not show a redundant workspace label in the sidebar', async () => {
+    render(<App />)
+
+    expect(await screen.findByText('service-contract.pdf')).toBeInTheDocument()
+    expect(screen.queryByText('WORKSPACE', { exact: true })).not.toBeInTheDocument()
+  })
+
+  it('does not reserve space for the removed sidebar', async () => {
+    render(<App />)
+
+    expect(await screen.findByText('service-contract.pdf')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(screen.queryByText('Document Service')).not.toBeInTheDocument()
+  })
+
+  it('replaces the breadcrumb with a service icon in the page header', async () => {
+    render(<App />)
+
+    expect(await screen.findByText('service-contract.pdf')).toBeInTheDocument()
+    expect(screen.queryByText('Workspace', { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText('Documents', { exact: true })).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'DocMesh 서비스' })).toBeInTheDocument()
+  })
+
   it('opens a document preview from its card', async () => {
     const user = userEvent.setup()
     render(<App />)
