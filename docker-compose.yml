@@ -24,7 +24,7 @@ services:
       start_period: 5s
 
   docmesh-doc:
-    image: docmesh-doc:latest
+    image: ghcr.io/kyundae-kim/docmesh-doc:v0.5.0
     restart: unless-stopped
     expose:
       - "8000"
