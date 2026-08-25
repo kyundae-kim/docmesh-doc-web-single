@@ -70,6 +70,14 @@ describe('DocMesh document workspace', () => {
     expect(screen.queryByText('release-notes.md')).not.toBeInTheDocument()
   })
 
+  it('shows dependency readiness separately from the document list', async () => {
+    render(<App />)
+
+    expect(await screen.findByText('service-contract.pdf')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'DocMesh 서비스 상태' })).toHaveTextContent('서비스 정상')
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/health/readiness'), expect.anything())
+  })
+
   it('does not show a redundant workspace label in the sidebar', async () => {
     render(<App />)
 

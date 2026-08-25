@@ -1,18 +1,71 @@
 import express from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const projectDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultDistDir = path.join(projectDir, 'dist')
 const defaultApiTarget = 'http://docmesh-doc:8000'
+const contextHeaders = [
+  'x-subject',
+  'x-user-id',
+  'x-tenant-id',
+  'x-roles',
+  'x-created-by',
+  'x-idempotency-scope',
+  'x-audit-actor',
+  'x-default-metadata',
+]
 
-export function createApp({ distDir = defaultDistDir, apiTarget = process.env.API_TARGET || defaultApiTarget } = {}) {
+function correlationId(request) {
+  const candidate = request.get('x-correlation-id')
+  return candidate && /^[\x20-\x7e]{1,128}$/.test(candidate) ? candidate : randomUUID()
+}
+
+function isOperatorRoute(request) {
+  const parsed = new URL(request.originalUrl, 'http://localhost')
+  let apiPath = parsed.pathname.replace(/^\/api(?=\/|$)/, '')
+  try {
+    apiPath = decodeURIComponent(apiPath)
+  } catch {
+    return true
+  }
+  if (apiPath === '/management' || apiPath.startsWith('/management/')) return true
+  if (apiPath.endsWith('/hard')) return true
+  return request.method === 'DELETE' && parsed.searchParams.get('hard')?.toLowerCase() === 'true' && /^\/documents\/[^/]+$/.test(apiPath)
+}
+
+export function createApp({
+  distDir = defaultDistDir,
+  apiTarget = process.env.API_TARGET || defaultApiTarget,
+  allowOperatorRoutes = process.env.ALLOW_OPERATOR_ROUTES === 'true',
+  forwardContextHeaders = process.env.FORWARD_TRUSTED_CONTEXT_HEADERS === 'true',
+} = {}) {
   const app = express()
   app.disable('x-powered-by')
 
   app.get('/health', (_request, response) => {
     response.type('text/plain').send('ok\n')
+  })
+
+  app.get('/health/liveness', (_request, response) => {
+    response.json({ status: 'ok' })
+  })
+
+  app.use('/api', (request, response, next) => {
+    if (!allowOperatorRoutes && isOperatorRoute(request)) {
+      const id = correlationId(request)
+      response.status(403).json({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'This operation is restricted to an operator environment.',
+          correlation_id: id,
+        },
+      })
+      return
+    }
+    next()
   })
 
   // Mounting at /api removes that prefix before the request reaches DocMesh.
@@ -24,6 +77,12 @@ export function createApp({ distDir = defaultDistDir, apiTarget = process.env.AP
       changeOrigin: true,
       proxyTimeout: 300000,
       timeout: 300000,
+      on: {
+        proxyReq: (proxyRequest) => {
+          if (forwardContextHeaders) return
+          contextHeaders.forEach((header) => proxyRequest.removeHeader(header))
+        },
+      },
     }),
   )
 

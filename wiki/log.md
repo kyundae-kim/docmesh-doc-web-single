@@ -28,3 +28,22 @@
 - Navigation updated: `index.md`
 - This log updated: `log.md`
 - All new pages cross-reference the central service and the related API/configuration/examples pages.
+
+## [2026-08-25] ingest | DocMesh Document Service Wiki v0.6.0
+- Sources ingested:
+  - `https://github.com/kyundae-kim/docmesh-doc/wiki/API-Reference-v0.6.0`
+  - `https://github.com/kyundae-kim/docmesh-doc/wiki/Configuration-v0.6.0`
+  - `https://github.com/kyundae-kim/docmesh-doc/wiki/Examples-v0.6.0`
+- Raw source files created:
+  - `raw/articles/docmesh-api-reference-v0-6-0.md`
+  - `raw/articles/docmesh-configuration-v0-6-0.md`
+  - `raw/articles/docmesh-examples-v0-6-0.md`
+- Wiki pages created:
+  - `concepts/api-reference-v0-6-0.md`
+  - `concepts/configuration-v0-6-0.md`
+  - `concepts/examples-v0-6-0.md`
+- Wiki page updated:
+  - `entities/docmesh-document-service.md`
+- Navigation updated: `index.md`
+- This log updated: `log.md`
+- v0.6.0 records the expanded upload/list/content and management/recovery surface, trusted request context, configuration ownership, and runtime version mismatch.

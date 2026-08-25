@@ -55,9 +55,11 @@ describe('Node web server', () => {
   let webPort
   let apiPort
   let upstreamRequests
+  let upstreamHeaders
 
   beforeEach(async () => {
     upstreamRequests = []
+    upstreamHeaders = []
     distDir = await mkdtemp(join(tmpdir(), 'docmesh-web-'))
     await mkdir(join(distDir, 'assets'))
     await writeFile(join(distDir, 'index.html'), '<html><body>DocMesh shell</body></html>')
@@ -67,6 +69,7 @@ describe('Node web server', () => {
       const chunks = []
       request.on('data', (chunk) => chunks.push(chunk))
       request.on('end', () => {
+        upstreamHeaders.push(request.headers)
         upstreamRequests.push({
           method: request.method,
           url: request.url,
@@ -114,5 +117,40 @@ describe('Node web server', () => {
     expect(upstreamRequests).toEqual([
       { method: 'POST', url: '/documents?limit=1', body: 'uploaded-content' },
     ])
+  })
+
+  it('provides liveness and blocks operator-only API routes at the BFF', async () => {
+    const liveness = await request(webPort, '/health/liveness')
+    const blocked = await request(webPort, '/api/management/data', {
+      method: 'DELETE',
+      headers: { 'x-correlation-id': 'operator-check' },
+    })
+
+    expect(liveness.status).toBe(200)
+    expect(JSON.parse(liveness.body)).toEqual({ status: 'ok' })
+    expect(blocked.status).toBe(403)
+    expect(JSON.parse(blocked.body)).toEqual({
+      error: {
+        code: 'FORBIDDEN',
+        message: 'This operation is restricted to an operator environment.',
+        correlation_id: 'operator-check',
+      },
+    })
+    expect(upstreamRequests).toEqual([])
+  })
+
+  it('does not forward unverified DMS context headers from browser requests', async () => {
+    await request(webPort, '/api/documents', {
+      headers: {
+        'x-subject': 'spoofed-user',
+        'x-tenant-id': 'spoofed-tenant',
+        'x-correlation-id': 'request-correlation',
+      },
+    })
+
+    expect(upstreamRequests).toHaveLength(1)
+    expect(upstreamHeaders[0]).not.toHaveProperty('x-subject')
+    expect(upstreamHeaders[0]).not.toHaveProperty('x-tenant-id')
+    expect(upstreamHeaders[0]['x-correlation-id']).toBe('request-correlation')
   })
 })
