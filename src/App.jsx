@@ -4,6 +4,7 @@ import {
   deleteDocument,
   downloadDocument,
   getDocumentContentUrl,
+  getReadiness,
   listDocuments,
   uploadDocument,
 } from './api'
@@ -213,10 +214,10 @@ function DeleteDialog({ document, onClose, onConfirm, isDeleting }) {
         <div className="confirm-icon"><Icon name="trash" size={21} /></div>
         <span className="modal-eyebrow">문서 삭제</span>
         <h2 id="delete-title">{document.original_filename}</h2>
-        <p>문서를 보관하거나 영구적으로 삭제할 수 있습니다. 영구 삭제 후에는 복구할 수 없습니다.</p>
+        <p>문서를 일반 목록에서 숨기고 보관 처리합니다. 운영자 환경의 영구 삭제는 이 화면에서 제공하지 않습니다.</p>
         <div className="delete-options">
-          <button type="button" className="delete-option" onClick={() => onConfirm(false)} disabled={isDeleting}><span><strong>보관 처리</strong><small>목록에서 숨기고 soft delete를 수행합니다.</small></span><Icon name="arrow" size={17} /></button>
-          <button type="button" className="delete-option destructive" onClick={() => onConfirm(true)} disabled={isDeleting}><span><strong>영구 삭제</strong><small>메타데이터와 파일을 모두 삭제합니다.</small></span><Icon name="trash" size={17} /></button>
+          <button type="button" className="delete-option" onClick={() => onConfirm()} disabled={isDeleting}><span><strong>보관 처리</strong><small>목록에서 숨기고 soft delete를 수행합니다.</small></span><Icon name="arrow" size={17} /></button>
+          <p className="operator-note">영구 삭제는 일반 사용자 화면에 노출하지 않는 운영자 작업입니다.</p>
         </div>
         <button type="button" className="text-button cancel-button" onClick={onClose} disabled={isDeleting}>취소</button>
       </section>
@@ -229,6 +230,10 @@ function Toast({ toast, onClose }) {
   return <div className={`toast ${toast.type || 'success'}`} role="status"><Icon name={toast.type === 'error' ? 'alert' : 'check'} size={17} /><span>{toast.message}</span><button type="button" onClick={onClose} aria-label="알림 닫기"><Icon name="close" size={15} /></button></div>
 }
 
+function ServiceStatus({ readiness }) {
+  return <div className={`service-status ${readiness.state}`} role="status" aria-label="DocMesh 서비스 상태"><span className="service-status-dot" />{readiness.message}</div>
+}
+
 export default function App() {
   const [documents, setDocuments] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
@@ -238,6 +243,7 @@ export default function App() {
   const [loadError, setLoadError] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [readiness, setReadiness] = useState({ state: 'checking', message: '서비스 확인 중' })
   const [selectedDocument, setSelectedDocument] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -273,6 +279,18 @@ export default function App() {
   useEffect(() => {
     loadDocuments()
   }, [loadDocuments])
+
+  useEffect(() => {
+    let active = true
+    getReadiness().then((payload) => {
+      if (!active) return
+      const ready = payload?.ok !== false && payload?.status !== 'error'
+      setReadiness({ state: ready ? 'ready' : 'error', message: ready ? '서비스 정상' : '서비스 점검 필요' })
+    }).catch(() => {
+      if (active) setReadiness({ state: 'error', message: '서비스 연결 오류' })
+    })
+    return () => { active = false }
+  }, [])
 
   const visibleDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -310,15 +328,15 @@ export default function App() {
     }
   }
 
-  const handleDelete = async (hard) => {
+  const handleDelete = async () => {
     if (!deleteTarget) return
     setIsDeleting(true)
     try {
-      await deleteDocument(deleteTarget.document_id, hard)
+      await deleteDocument(deleteTarget.document_id, false)
       setDocuments((current) => current.filter((document) => document.document_id !== deleteTarget.document_id))
       if (selectedDocument?.document_id === deleteTarget.document_id) setSelectedDocument(null)
       setDeleteTarget(null)
-      showToast(hard ? '문서를 영구 삭제했습니다.' : '문서를 보관 처리했습니다.')
+      showToast('문서를 보관 처리했습니다.')
     } catch (error) {
       showToast(getApiMessage(error, '문서 삭제에 실패했습니다.'), 'error')
     } finally {
@@ -334,7 +352,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <main className="main-content" id="documents">
-        <header className="page-header"><div className="page-header-main"><div className="service-icon" role="img" aria-label="DocMesh 서비스"><span /></div><div><h1>Document library</h1><p>팀의 문서를 한곳에서 간결하게 관리하세요.</p></div></div><button type="button" className="refresh-button" onClick={() => loadDocuments()} disabled={isLoading || isRefreshing}><Icon name="refresh" size={16} />{isRefreshing ? '새로 고치는 중' : '새로 고침'}</button></header>
+        <header className="page-header"><div className="page-header-main"><div className="service-icon" role="img" aria-label="DocMesh 서비스"><span /></div><div><h1>Document library</h1><p>팀의 문서를 한곳에서 간결하게 관리하세요.</p></div></div><div className="page-header-actions"><ServiceStatus readiness={readiness} /><button type="button" className="refresh-button" onClick={() => loadDocuments()} disabled={isLoading || isRefreshing}><Icon name="refresh" size={16} />{isRefreshing ? '새로 고치는 중' : '새로 고침'}</button></div></header>
 
         <div className="stats-row"><div className="stat-card accent"><span className="stat-label">전체 문서</span><strong>{documents.length}</strong><span className="stat-foot"><Icon name="file" size={13} /> {documents.length === 1 ? '1 document' : `${documents.length} documents`}</span></div><div className="stat-card"><span className="stat-label">사용 가능</span><strong>{availableCount}</strong><span className="stat-foot"><span className="mini-dot green" /> 정상 상태</span></div><div className="stat-card"><span className="stat-label">저장 용량</span><strong>{formatBytes(totalSize)}</strong><span className="stat-foot">현재 문서 기준</span></div><div className="stat-card stat-hint"><div className="hint-icon"><Icon name="bolt" size={17} /></div><div><strong>빠른 시작</strong><span>파일을 업로드해 보세요.</span></div></div></div>
 

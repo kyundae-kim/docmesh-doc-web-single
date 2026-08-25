@@ -10,9 +10,10 @@ DocMesh 프로젝트의 단일 사용자용 문서 관리 웹 UI입니다. React
 - `POST /documents` multipart 파일 업로드
 - 문서 metadata 상세 보기와 content inline preview
 - attachment download
-- soft delete / hard delete
+- soft delete (일반 사용자 화면에서 hard delete는 차단)
 - `/health/readiness` 기반 서비스 상태 표시
 - 오류 envelope의 사용자 메시지 표시 및 로딩·빈 상태 처리
+- v0.6.0의 cursor/page/iterator, bytes/file upload, content 변형 API adapter
 
 ## 실행
 
@@ -26,13 +27,13 @@ npm run dev
 API base를 직접 지정해야 하는 환경에서는 `.env`를 추가합니다.
 
 ```env
-VITE_API_BASE_URL=http://docmesh-doc:8000
+VITE_API_BASE_URL=/api
 ```
 
-직접 지정하는 경우 배포 origin에 대한 API CORS 허용이 필요합니다. 배포 서버가 `/api`를 DocMesh 서비스로 전달한다면 다음처럼 사용할 수 있습니다.
+직접 DocMesh service를 지정하는 경우 배포 origin에 대한 API CORS 허용이 필요합니다. 기본값은 BFF same-origin 경로입니다.
 
 ```env
-VITE_API_BASE_URL=/api
+VITE_API_BASE_URL=http://docmesh-doc:8000
 ```
 
 ## 검증
@@ -44,7 +45,16 @@ npm run build
 
 ## Docker 배포
 
-`Dockerfile`은 Vite 애플리케이션을 빌드한 뒤 Node 정적 서버로 제공하는 multi-stage 이미지입니다. `server.mjs`가 정적 파일, SPA fallback, `/api` 요청의 Compose 내부 `docmesh-doc:8000` 프록시를 담당하므로 브라우저와 API가 같은 origin을 사용합니다.
+`Dockerfile`은 Vite 애플리케이션을 빌드한 뒤 Node 정적 서버로 제공하는 multi-stage 이미지입니다. `server.mjs`가 정적 파일, SPA fallback, `/api` 요청의 Compose 내부 `docmesh-doc:8000` 프록시를 담당하므로 브라우저와 API가 같은 origin을 사용합니다. BFF는 management/recovery와 hard-delete route를 기본 차단하고, 브라우저가 보낸 검증되지 않은 `X-*` operation context header도 upstream으로 전달하지 않습니다.
+
+인증 gateway가 별도로 BFF 앞단에 있고 operator network가 격리된 경우에만 다음 환경 변수를 명시적으로 활성화합니다.
+
+```env
+ALLOW_OPERATOR_ROUTES=true
+FORWARD_TRUSTED_CONTEXT_HEADERS=true
+```
+
+일반 사용자 배포에서는 두 값을 설정하지 않아야 합니다.
 
 배포 전 Docker Engine과 Compose v2를 준비하고, `DOCMESH_IMAGE`로 지정한 DocMesh Document Service 이미지를 로컬 또는 접근 가능한 레지스트리에 준비합니다.
 
