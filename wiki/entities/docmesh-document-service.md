@@ -1,10 +1,10 @@
 ---
 title: DocMesh Document Service
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-25
 type: entity
 tags: [document, api, integration, architecture, security]
-sources: [raw/articles/docmesh-api-reference-v0-5-0.md, raw/articles/docmesh-configuration-v0-5-0.md, raw/articles/docmesh-examples-v0-5-0.md]
+sources: [raw/articles/docmesh-api-reference-v0-5-0.md, raw/articles/docmesh-configuration-v0-5-0.md, raw/articles/docmesh-examples-v0-5-0.md, raw/articles/docmesh-api-reference-v0-6-0.md, raw/articles/docmesh-configuration-v0-6-0.md, raw/articles/docmesh-examples-v0-6-0.md]
 confidence: medium
 ---
 
@@ -28,8 +28,19 @@ DocMesh Document Service는 문서 binary와 metadata를 저장·조회·삭제�
 
 서비스 설정은 process environment 또는 명시적인 `DmsSettings`에서 로드된다. metadata backend는 PostgreSQL 또는 SQLite이며, 두 경우 모두 MinIO object store 설정이 필요하다. `ROOT_PATH`와 CORS 설정은 배포 URL과 브라우저 호출 가능성에 직접 영향을 준다. ^[raw/articles/docmesh-configuration-v0-5-0.md]
 
+## v0.6.0 업데이트
+
+v0.6.0은 기존 문서 lifecycle 경계 위에 bytes/file upload, page·iterator list, eager·async·chunk·checksum-aware content read, upload operation 조회, management·recovery route와 host lifecycle API를 추가한 공개 surface다. 이 페이지의 frontend 소비자는 cursor를 opaque 값으로 유지하고, public metadata의 `storage_key` 비노출과 binary response header를 보존해야 한다. ^[raw/articles/docmesh-api-reference-v0-6-0.md]
+
+새 API의 `X-Subject`, `X-User-ID`, `X-Tenant-ID`, `X-Roles` 등 context header는 application이 인증 claim으로 검증하지 않는다. management·recovery·hard delete·data reset은 일반 사용자 경로가 아니라 외부 authorization boundary와 operator 환경을 전제로 한다. ^[raw/articles/docmesh-api-reference-v0-6-0.md] ^[raw/articles/docmesh-configuration-v0-6-0.md] ^[raw/articles/docmesh-examples-v0-6-0.md]
+
+설정 측면에서는 `ROOT_PATH`, CORS, PostgreSQL/SQLite 선택, MinIO 필수성, `POSTGRES_DSN` 금지, caller-owned/application-owned runtime lifecycle을 v0.6.0 기준으로 재확인한다. project version `0.6.0`과 runtime/OpenAPI metadata `0.5.0`의 불일치는 UI와 진단에서 별도 표시해야 한다. ^[raw/articles/docmesh-configuration-v0-6-0.md]
+
 ## 관련 문서
 
 - [[api-reference-v0-5-0]] — HTTP route, schema, 오류 계약
 - [[configuration-v0-5-0]] — 환경 변수와 runtime 조립
 - [[examples-v0-5-0]] — curl 및 hosting 실행 흐름
+- [[api-reference-v0-6-0]] — 확장된 공개 API와 management/recovery 계약
+- [[configuration-v0-6-0]] — v0.6.0 환경, context, readiness와 lifecycle
+- [[examples-v0-6-0]] — v0.6.0 API ID별 실행 예시
