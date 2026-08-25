@@ -31,10 +31,7 @@ a { color: inherit; text-decoration: none; }
 .main-content { width: min(100%, 1300px); margin: 0 auto; padding: 54px clamp(28px, 5vw, 76px) 72px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .page-header-main { display: flex; align-items: flex-start; gap: 14px; }
-<<<<<<< HEAD
 .page-header-actions { display: flex; align-items: center; gap: 10px; }
-=======
->>>>>>> 3a6e375e9966252b85187168e4aecc796b45b142
 .service-icon { width: 34px; height: 34px; position: relative; display: grid; flex: 0 0 auto; place-items: center; margin-top: 2px; background: var(--accent); border-radius: 10px 10px 10px 3px; transform: rotate(-8deg); }
 .service-icon::before, .service-icon::after, .service-icon span { content: ''; position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #e9f8f3; }
 .service-icon::before { transform: translate(-8px, -5px); }
