@@ -20,7 +20,11 @@ services:
       start_period: 5s
 
   docmesh-doc:
+<<<<<<< HEAD
     image: ghcr.io/kyundae-kim/docmesh-doc:v0.6.0
+=======
+    image: ghcr.io/kyundae-kim/docmesh-doc:v0.5.0
+>>>>>>> 3a6e375e9966252b85187168e4aecc796b45b142
     restart: unless-stopped
     ports:
       - 8000

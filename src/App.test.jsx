@@ -70,6 +70,7 @@ describe('DocMesh document workspace', () => {
     expect(screen.queryByText('release-notes.md')).not.toBeInTheDocument()
   })
 
+<<<<<<< HEAD
   it('shows dependency readiness separately from the document list', async () => {
     render(<App />)
 
@@ -78,6 +79,8 @@ describe('DocMesh document workspace', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/health/readiness'), expect.anything())
   })
 
+=======
+>>>>>>> 3a6e375e9966252b85187168e4aecc796b45b142
   it('does not show a redundant workspace label in the sidebar', async () => {
     render(<App />)
 

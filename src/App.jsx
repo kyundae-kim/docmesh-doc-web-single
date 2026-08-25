@@ -4,7 +4,6 @@ import {
   deleteDocument,
   downloadDocument,
   getDocumentContentUrl,
-  getReadiness,
   listDocuments,
   uploadDocument,
 } from './api'
@@ -243,7 +242,6 @@ export default function App() {
   const [loadError, setLoadError] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [readiness, setReadiness] = useState({ state: 'checking', message: '서비스 확인 중' })
   const [selectedDocument, setSelectedDocument] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -279,18 +277,6 @@ export default function App() {
   useEffect(() => {
     loadDocuments()
   }, [loadDocuments])
-
-  useEffect(() => {
-    let active = true
-    getReadiness().then((payload) => {
-      if (!active) return
-      const ready = payload?.ok !== false && payload?.status !== 'error'
-      setReadiness({ state: ready ? 'ready' : 'error', message: ready ? '서비스 정상' : '서비스 점검 필요' })
-    }).catch(() => {
-      if (active) setReadiness({ state: 'error', message: '서비스 연결 오류' })
-    })
-    return () => { active = false }
-  }, [])
 
   const visibleDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -352,7 +338,11 @@ export default function App() {
   return (
     <div className="app-shell">
       <main className="main-content" id="documents">
+<<<<<<< HEAD
         <header className="page-header"><div className="page-header-main"><div className="service-icon" role="img" aria-label="DocMesh 서비스"><span /></div><div><h1>Document library</h1><p>팀의 문서를 한곳에서 간결하게 관리하세요.</p></div></div><div className="page-header-actions"><ServiceStatus readiness={readiness} /><button type="button" className="refresh-button" onClick={() => loadDocuments()} disabled={isLoading || isRefreshing}><Icon name="refresh" size={16} />{isRefreshing ? '새로 고치는 중' : '새로 고침'}</button></div></header>
+=======
+        <header className="page-header"><div className="page-header-main"><div className="service-icon" role="img" aria-label="DocMesh 서비스"><span /></div><div><h1>Document library</h1><p>팀의 문서를 한곳에서 간결하게 관리하세요.</p></div></div><button type="button" className="refresh-button" onClick={() => loadDocuments()} disabled={isLoading || isRefreshing}><Icon name="refresh" size={16} />{isRefreshing ? '새로 고치는 중' : '새로 고침'}</button></header>
+>>>>>>> 3a6e375e9966252b85187168e4aecc796b45b142
 
         <div className="stats-row"><div className="stat-card accent"><span className="stat-label">전체 문서</span><strong>{documents.length}</strong><span className="stat-foot"><Icon name="file" size={13} /> {documents.length === 1 ? '1 document' : `${documents.length} documents`}</span></div><div className="stat-card"><span className="stat-label">사용 가능</span><strong>{availableCount}</strong><span className="stat-foot"><span className="mini-dot green" /> 정상 상태</span></div><div className="stat-card"><span className="stat-label">저장 용량</span><strong>{formatBytes(totalSize)}</strong><span className="stat-foot">현재 문서 기준</span></div><div className="stat-card stat-hint"><div className="hint-icon"><Icon name="bolt" size={17} /></div><div><strong>빠른 시작</strong><span>파일을 업로드해 보세요.</span></div></div></div>
 
