@@ -1,7 +1,7 @@
 services:
   docmesh-doc:
     # image: docmesh-doc:v0.5.0
-    image: docmesh-doc:latest
+    image: ghcr.io/kyundae-kim/docmesh-doc:v0.6.0
     restart: unless-stopped
     environment:
       DMS_METADATA_BACKEND: sqlite
@@ -10,7 +10,7 @@ services:
       MINIO_SECRET_KEY: password123
       MINIO_BUCKET: documents
       MINIO_SECURE: false
-      SQLITE_PATH: './data/docmesh.sqlite3'
+      SQLITE_PATH: ':memory:'
     ports:
       - 8000
     depends_on:
