@@ -1,10 +1,10 @@
 ---
 title: DocMesh Document Service
 created: 2026-08-17
-updated: 2026-08-25
+updated: 2026-09-04
 type: entity
 tags: [document, api, integration, architecture, security]
-sources: [raw/articles/docmesh-api-reference-v0-5-0.md, raw/articles/docmesh-configuration-v0-5-0.md, raw/articles/docmesh-examples-v0-5-0.md, raw/articles/docmesh-api-reference-v0-6-0.md, raw/articles/docmesh-configuration-v0-6-0.md, raw/articles/docmesh-examples-v0-6-0.md]
+sources: [raw/articles/docmesh-api-reference-v0-5-0.md, raw/articles/docmesh-configuration-v0-5-0.md, raw/articles/docmesh-examples-v0-5-0.md, raw/articles/docmesh-api-reference-v0-6-0.md, raw/articles/docmesh-configuration-v0-6-0.md, raw/articles/docmesh-examples-v0-6-0.md, raw/articles/docmesh-api-reference-v0-7-0.md, raw/articles/docmesh-configuration-v0-7-0.md, raw/articles/docmesh-examples-v0-7-0.md]
 confidence: medium
 ---
 
@@ -36,6 +36,16 @@ v0.6.0은 기존 문서 lifecycle 경계 위에 bytes/file upload, page·iterato
 
 설정 측면에서는 `ROOT_PATH`, CORS, PostgreSQL/SQLite 선택, MinIO 필수성, `POSTGRES_DSN` 금지, caller-owned/application-owned runtime lifecycle을 v0.6.0 기준으로 재확인한다. project version `0.6.0`과 runtime/OpenAPI metadata `0.5.0`의 불일치는 UI와 진단에서 별도 표시해야 한다. ^[raw/articles/docmesh-configuration-v0-6-0.md]
 
+## v0.7.0 업데이트
+
+v0.7.0은 `docmesh-doc` project version과 FastAPI/OpenAPI runtime version을 모두 `0.7.0`으로 정렬한다. upstream `dms-core` version은 `0.11.0`으로 별도 식별하며, 기준 implementation commit은 `14cef6e25943ed5ab9f7f0c56b5948c130b69c7e`이다. ^[raw/articles/docmesh-api-reference-v0-7-0.md]
+
+`dms-core` v0.11의 partition-required facade에 맞춰 application은 하나의 configured personal partition과 `admin` access context를 모든 일반 작업에 사용한다. v0.6.0에서 기록했던 request context header 의존과 달리 v0.7.0에서는 `X-User-ID`, `X-Subject`, `X-Tenant-ID`, `X-Roles` 등이 application identity를 덮어쓰지 않으며, bearer/OAuth2/Keycloak middleware도 내장하지 않는다. management, reset, hard-delete authorization은 외부 gateway·host 경계의 책임이다. ^[raw/articles/docmesh-api-reference-v0-7-0.md] ^[raw/articles/docmesh-configuration-v0-7-0.md]
+
+public metadata에는 `partition` projection이 포함되고 `user_id`와 `storage_key`는 제외된다. `storage_key`는 internal metadata·inspection·recovery boundary에서만 사용하며, public bytes request에서도 `user_id`를 받지 않는다. v0.7.0은 configured-partition reset/initialization과 reconciliation plan surface를 추가하고, global reset과 partition reset의 범위를 분리한다. ^[raw/articles/docmesh-api-reference-v0-7-0.md]
+
+frontend는 `ROOT_PATH`가 반영된 base URL과 upload `Location`, opaque cursor, binary response headers를 보존해야 한다. liveness와 metadata/MinIO readiness를 구분하고, injected SDK/runtime은 caller-owned로 취급하며 application-owned runtime만 shutdown에서 닫는다. streaming과 checksum-aware copy의 lifecycle·검증 header도 UI와 운영 진단에서 별도로 고려한다. ^[raw/articles/docmesh-api-reference-v0-7-0.md] ^[raw/articles/docmesh-configuration-v0-7-0.md] ^[raw/articles/docmesh-examples-v0-7-0.md]
+
 ## 관련 문서
 
 - [[api-reference-v0-5-0]] — HTTP route, schema, 오류 계약
@@ -44,3 +54,6 @@ v0.6.0은 기존 문서 lifecycle 경계 위에 bytes/file upload, page·iterato
 - [[api-reference-v0-6-0]] — 확장된 공개 API와 management/recovery 계약
 - [[configuration-v0-6-0]] — v0.6.0 환경, context, readiness와 lifecycle
 - [[examples-v0-6-0]] — v0.6.0 API ID별 실행 예시
+- [[api-reference-v0-7-0]] — v0.7.0 공개 API와 partition-required 계약
+- [[configuration-v0-7-0]] — v0.7.0 environment, storage, identity와 lifecycle
+- [[examples-v0-7-0]] — v0.7.0 API ID별 실행 예시

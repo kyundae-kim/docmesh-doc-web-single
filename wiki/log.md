@@ -47,3 +47,22 @@
 - Navigation updated: `index.md`
 - This log updated: `log.md`
 - v0.6.0 records the expanded upload/list/content and management/recovery surface, trusted request context, configuration ownership, and runtime version mismatch.
+
+## [2026-09-04] ingest | DocMesh Document Service Wiki v0.7.0
+- Sources ingested:
+  - `https://github.com/kyundae-kim/docmesh-doc/wiki/API-Reference-v0.7.0`
+  - `https://github.com/kyundae-kim/docmesh-doc/wiki/Configuration-v0.7.0`
+  - `https://github.com/kyundae-kim/docmesh-doc/wiki/Examples-v0.7.0`
+- Raw source files created:
+  - `raw/articles/docmesh-api-reference-v0-7-0.md`
+  - `raw/articles/docmesh-configuration-v0-7-0.md`
+  - `raw/articles/docmesh-examples-v0-7-0.md`
+- Wiki pages created:
+  - `concepts/api-reference-v0-7-0.md`
+  - `concepts/configuration-v0-7-0.md`
+  - `concepts/examples-v0-7-0.md`
+- Wiki page updated:
+  - `entities/docmesh-document-service.md`
+- Navigation updated: `index.md`
+- This log updated: `log.md`
+- v0.7.0 records the partition-required facade, fixed application identity, public/internal schema boundary, partition-scoped reset, runtime ownership, and operator authorization limits.
