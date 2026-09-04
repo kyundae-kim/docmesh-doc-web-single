@@ -23,9 +23,16 @@ function correlationId(request) {
   return candidate && /^[\x20-\x7e]{1,128}$/.test(candidate) ? candidate : randomUUID()
 }
 
-function isOperatorRoute(request) {
+function normalizePrefix(value, fallback = '/api') {
+  const candidate = String(value || fallback).trim()
+  const withLeadingSlash = candidate.startsWith('/') ? candidate : `/${candidate}`
+  return withLeadingSlash.replace(/\/+$/, '') || fallback
+}
+
+function isOperatorRoute(request, apiPrefix) {
   const parsed = new URL(request.originalUrl, 'http://localhost')
-  let apiPath = parsed.pathname.replace(/^\/api(?=\/|$)/, '')
+  const prefix = normalizePrefix(apiPrefix)
+  let apiPath = parsed.pathname === prefix ? '' : parsed.pathname.startsWith(`${prefix}/`) ? parsed.pathname.slice(prefix.length) : parsed.pathname
   try {
     apiPath = decodeURIComponent(apiPath)
   } catch {
@@ -36,13 +43,30 @@ function isOperatorRoute(request) {
   return request.method === 'DELETE' && parsed.searchParams.get('hard')?.toLowerCase() === 'true' && /^\/documents\/[^/]+$/.test(apiPath)
 }
 
+function sendBffUpstreamError(request, response) {
+  if (response.headersSent) return
+  const id = correlationId(request)
+  response.statusCode = 502
+  response.setHeader('Content-Type', 'application/json')
+  response.setHeader('X-Correlation-ID', id)
+  response.end(JSON.stringify({
+    error: {
+      code: 'BFF_UPSTREAM_ERROR',
+      message: 'The document service is unavailable.',
+      correlation_id: id,
+    },
+  }))
+}
+
 export function createApp({
   distDir = defaultDistDir,
   apiTarget = process.env.API_TARGET || defaultApiTarget,
+  apiPrefix = process.env.API_PREFIX || '/api',
   allowOperatorRoutes = process.env.ALLOW_OPERATOR_ROUTES === 'true',
   forwardContextHeaders = process.env.FORWARD_TRUSTED_CONTEXT_HEADERS === 'true',
 } = {}) {
   const app = express()
+  const normalizedApiPrefix = normalizePrefix(apiPrefix)
   app.disable('x-powered-by')
 
   app.get('/health', (_request, response) => {
@@ -53,9 +77,10 @@ export function createApp({
     response.json({ status: 'ok' })
   })
 
-  app.use('/api', (request, response, next) => {
-    if (!allowOperatorRoutes && isOperatorRoute(request)) {
+  app.use(normalizedApiPrefix, (request, response, next) => {
+    if (!allowOperatorRoutes && isOperatorRoute(request, normalizedApiPrefix)) {
       const id = correlationId(request)
+      response.set('X-Correlation-ID', id)
       response.status(403).json({
         error: {
           code: 'FORBIDDEN',
@@ -71,7 +96,7 @@ export function createApp({
   // Mounting at /api removes that prefix before the request reaches DocMesh.
   // Do not add body-parsing middleware before this proxy: uploads are streamed.
   app.use(
-    '/api',
+    normalizedApiPrefix,
     createProxyMiddleware({
       target: apiTarget,
       changeOrigin: true,
@@ -82,6 +107,7 @@ export function createApp({
           if (forwardContextHeaders) return
           contextHeaders.forEach((header) => proxyRequest.removeHeader(header))
         },
+        error: (_error, request, response) => sendBffUpstreamError(request, response),
       },
     }),
   )

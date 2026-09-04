@@ -3,12 +3,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_ENABLE_OPERATOR_CONSOLE: ${VITE_ENABLE_OPERATOR_CONSOLE:-false}
     restart: unless-stopped
     ports:
-      - 8080
+      - "${WEB_PORT:-8080}:8080"
     environment:
       PORT: 8080
-      API_TARGET: http://docmesh-doc:8000
+      API_TARGET: ${API_TARGET:-http://docmesh-doc:8000}
+      API_PREFIX: ${API_PREFIX:-/api}
+      ALLOW_OPERATOR_ROUTES: ${ALLOW_OPERATOR_ROUTES:-false}
+      FORWARD_TRUSTED_CONTEXT_HEADERS: ${FORWARD_TRUSTED_CONTEXT_HEADERS:-false}
     depends_on:
       docmesh-doc:
         condition: service_healthy
@@ -20,21 +26,22 @@ services:
       start_period: 5s
 
   docmesh-doc:
-    image: ghcr.io/kyundae-kim/docmesh-doc:v0.6.0
+    image: ${DOCMESH_IMAGE:-ghcr.io/kyundae-kim/docmesh-doc:v0.7.0}
     restart: unless-stopped
-    ports:
-      - 8000
+    expose:
+      - "8000"
     environment:
-      DMS_METADATA_BACKEND: sqlite
-      SQLITE_PATH: ":memory:"
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: admin
-      MINIO_SECRET_KEY: password123
-      MINIO_BUCKET: documents
-      MINIO_SECURE: false
-    depends_on:
-      minio:
-        condition: service_healthy
+      DMS_METADATA_BACKEND: ${DMS_METADATA_BACKEND:-sqlite}
+      SQLITE_PATH: ${SQLITE_PATH:-/data/docmesh.sqlite3}
+      DMS_APPLICATION_USER_ID: ${DMS_APPLICATION_USER_ID:-docmesh-doc}
+      DMS_MAX_FILE_SIZE: ${DMS_MAX_FILE_SIZE:-104857600}
+      ROOT_PATH: ${ROOT_PATH:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}
+      MINIO_BUCKET: ${MINIO_BUCKET:-documents}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      MINIO_REGION: ${MINIO_REGION:-}
     healthcheck:
       test:
         - CMD-SHELL
@@ -53,12 +60,17 @@ services:
       - "9000"
       - "9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: password123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
     command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - minio-data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 10s
+
+volumes:
+  minio-data:

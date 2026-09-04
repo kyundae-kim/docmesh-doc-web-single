@@ -1,20 +1,4 @@
 services:
-  docmesh-doc:
-    image: ghcr.io/kyundae-kim/docmesh-doc:v0.6.0
-    restart: unless-stopped
-    environment:
-      DMS_METADATA_BACKEND: sqlite
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: admin
-      MINIO_SECRET_KEY: password123
-      MINIO_BUCKET: documents
-      MINIO_SECURE: false
-      SQLITE_PATH: ':memory:'
-    ports:
-      - 8000
-    depends_on:
-      - minio
-
   minio:
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z-cpuv1
     restart: unless-stopped
@@ -30,3 +14,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  docmesh-doc:
+    image: ghcr.io/kyundae-kim/docmesh-doc:v0.7.0
+    restart: unless-stopped
+    environment:
+      DMS_METADATA_BACKEND: sqlite
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password123
+      MINIO_BUCKET: documents
+      MINIO_SECURE: false
+      SQLITE_PATH: ':memory:'
+      DMS_APPLICATION_USER_ID: docmesh-doc
+    ports:
+      - 8000
+    depends_on:
+      - minio

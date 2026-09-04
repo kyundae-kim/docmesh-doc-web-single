@@ -75,6 +75,19 @@ describe('Node web server', () => {
           url: request.url,
           body: Buffer.concat(chunks).toString(),
         })
+        if (request.url.startsWith('/documents/binary')) {
+          response.statusCode = 200
+          response.setHeader('content-type', 'text/plain')
+          response.setHeader('content-length', '11')
+          response.setHeader('content-disposition', 'inline; filename="binary.txt"')
+          response.setHeader('x-document-checksum', 'sha256:binary')
+          response.setHeader('x-checksum-verified', 'true')
+          response.end('binary-body')
+          return
+        }
+        if (request.method === 'POST' && request.url.startsWith('/documents')) {
+          response.setHeader('location', '/documents/upstream-created')
+        }
         response.setHeader('content-type', 'application/json')
         response.end(JSON.stringify({ ok: true, path: request.url }))
       })
@@ -114,9 +127,22 @@ describe('Node web server', () => {
 
     expect(response.status).toBe(200)
     expect(JSON.parse(response.body)).toEqual({ ok: true, path: '/documents?limit=1' })
+    expect(response.headers.location).toBe('/documents/upstream-created')
     expect(upstreamRequests).toEqual([
       { method: 'POST', url: '/documents?limit=1', body: 'uploaded-content' },
     ])
+  })
+
+  it('preserves binary response headers through the BFF', async () => {
+    const response = await request(webPort, '/api/documents/binary')
+
+    expect(response.status).toBe(200)
+    expect(response.body).toBe('binary-body')
+    expect(response.headers['content-type']).toContain('text/plain')
+    expect(response.headers['content-length']).toBe('11')
+    expect(response.headers['content-disposition']).toContain('binary.txt')
+    expect(response.headers['x-document-checksum']).toBe('sha256:binary')
+    expect(response.headers['x-checksum-verified']).toBe('true')
   })
 
   it('provides liveness and blocks operator-only API routes at the BFF', async () => {
@@ -136,6 +162,18 @@ describe('Node web server', () => {
         correlation_id: 'operator-check',
       },
     })
+    expect(blocked.headers['x-correlation-id']).toBe('operator-check')
+    expect(upstreamRequests).toEqual([])
+  })
+
+  it('blocks hard-delete query variants before they reach the application', async () => {
+    const blocked = await request(webPort, '/api/documents/doc-1?hard=true', {
+      method: 'DELETE',
+      headers: { 'x-correlation-id': 'hard-delete-check' },
+    })
+
+    expect(blocked.status).toBe(403)
+    expect(blocked.headers['x-correlation-id']).toBe('hard-delete-check')
     expect(upstreamRequests).toEqual([])
   })
 
@@ -152,5 +190,60 @@ describe('Node web server', () => {
     expect(upstreamHeaders[0]).not.toHaveProperty('x-subject')
     expect(upstreamHeaders[0]).not.toHaveProperty('x-tenant-id')
     expect(upstreamHeaders[0]['x-correlation-id']).toBe('request-correlation')
+  })
+
+  it('returns the public error envelope when the upstream is unreachable', async () => {
+    const failingWebServer = createServer(createApp({ distDir, apiTarget: 'http://127.0.0.1:1' }))
+    const failingPort = await listen(failingWebServer)
+
+    try {
+      const response = await request(failingPort, '/api/documents', {
+        headers: { 'x-correlation-id': 'upstream-unavailable' },
+      })
+
+      expect(response.status).toBe(502)
+      expect(response.headers['x-correlation-id']).toBe('upstream-unavailable')
+      expect(JSON.parse(response.body)).toEqual({
+        error: {
+          code: 'BFF_UPSTREAM_ERROR',
+          message: 'The document service is unavailable.',
+          correlation_id: 'upstream-unavailable',
+        },
+      })
+    } finally {
+      await close(failingWebServer)
+    }
+  })
+
+  it('supports a ROOT_PATH-aware API prefix without changing upstream paths', async () => {
+    const prefixedWebServer = createServer(createApp({ distDir, apiTarget: `http://127.0.0.1:${apiPort}`, apiPrefix: '/dms/api' }))
+    const prefixedPort = await listen(prefixedWebServer)
+
+    try {
+      const response = await request(prefixedPort, '/dms/api/documents?limit=2')
+      const blocked = await request(prefixedPort, '/dms/api/management/data', { method: 'DELETE' })
+
+      expect(response.status).toBe(200)
+      expect(JSON.parse(response.body)).toEqual({ ok: true, path: '/documents?limit=2' })
+      expect(blocked.status).toBe(403)
+      expect(upstreamRequests).toHaveLength(1)
+    } finally {
+      await close(prefixedWebServer)
+    }
+  })
+
+  it('forwards operator routes only when the BFF is explicitly enabled', async () => {
+    const operatorWebServer = createServer(createApp({ distDir, apiTarget: `http://127.0.0.1:${apiPort}`, allowOperatorRoutes: true }))
+    const operatorPort = await listen(operatorWebServer)
+
+    try {
+      const response = await request(operatorPort, '/api/management/data')
+
+      expect(response.status).toBe(200)
+      expect(JSON.parse(response.body)).toEqual({ ok: true, path: '/management/data' })
+      expect(upstreamRequests.at(-1)).toEqual({ method: 'GET', url: '/management/data', body: '' })
+    } finally {
+      await close(operatorWebServer)
+    }
   })
 })
