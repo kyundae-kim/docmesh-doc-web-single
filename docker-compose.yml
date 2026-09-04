@@ -42,13 +42,6 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-documents}
       MINIO_SECURE: ${MINIO_SECURE:-false}
       MINIO_REGION: ${MINIO_REGION:-}
-    volumes:
-      - docmesh-data:/data
-    depends_on:
-      minio-init:
-        condition: service_completed_successfully
-      docmesh-data-init:
-        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD-SHELL
@@ -79,32 +72,5 @@ services:
       retries: 12
       start_period: 10s
 
-  minio-init:
-    image: minio/mc:latest
-    restart: "no"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
-      MINIO_BUCKET: ${MINIO_BUCKET:-documents}
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
-        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
-
-  docmesh-data-init:
-    image: alpine:3.20
-    restart: "no"
-    user: "0:0"
-    volumes:
-      - docmesh-data:/data
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - chown -R 10001:10001 /data
-
 volumes:
-  docmesh-data:
   minio-data:
