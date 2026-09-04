@@ -1,15 +1,25 @@
 const DEFAULT_API_BASE_URL = '/api'
 
-export const PROJECT_VERSION = '0.6.0'
+export const PROJECT_VERSION = '0.7.0'
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, code = 'UNKNOWN_ERROR', correlationId = '' } = {}) {
+  constructor(message, {
+    status = 0,
+    code = 'UNKNOWN_ERROR',
+    correlationId = '',
+    category = '',
+    retryable = undefined,
+    documentId = '',
+  } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.correlationId = correlationId
+    this.category = category
+    this.retryable = retryable
+    this.documentId = documentId
   }
 }
 
@@ -43,12 +53,12 @@ function uploadForm(file, { documentId = '', metadata, createdBy = '' } = {}) {
   const formData = new FormData()
   formData.append('file', file)
   if (String(documentId).trim()) formData.append('document_id', String(documentId).trim())
-  if (metadata !== undefined) formData.append('metadata', JSON.stringify(metadata))
+  if (metadata !== undefined && metadata !== null) formData.append('metadata', JSON.stringify(metadata))
   if (String(createdBy).trim()) formData.append('created_by', String(createdBy).trim())
   return formData
 }
 
-export async function request(path, options = {}) {
+async function performRequest(path, options = {}) {
   const url = `${API_BASE_URL}${path}`
   let response
 
@@ -80,10 +90,31 @@ export async function request(path, options = {}) {
       status: response.status,
       code: error?.code || 'REQUEST_FAILED',
       correlationId: error?.correlation_id || correlationId,
+      category: error?.category || '',
+      retryable: error?.retryable,
+      documentId: error?.document_id || '',
     })
   }
 
+  return { payload, response }
+}
+
+export async function request(path, options = {}) {
+  const { payload } = await performRequest(path, options)
   return payload
+}
+
+async function requestWithMeta(path, options = {}) {
+  return performRequest(path, options)
+}
+
+function enrichUploadPayload({ payload, response }) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload
+  return {
+    ...payload,
+    location: response.headers.get('Location') || '',
+    correlationId: response.headers.get('X-Correlation-ID') || '',
+  }
 }
 
 function listDocumentsFrom(path, { cursor = '', limit = 100, status = '' } = {}) {
@@ -102,12 +133,12 @@ export function listDocumentsIterator({ pageSize = 100, status = '' } = {}) {
   return request(`/documents/iterator${queryString({ page_size: pageSize, status })}`)
 }
 
-export function uploadDocument(file, documentId = '', options = {}) {
-  return request('/documents', { method: 'POST', body: uploadForm(file, { ...options, documentId }) })
+export async function uploadDocument(file, documentId = '', options = {}) {
+  return enrichUploadPayload(await requestWithMeta('/documents', { method: 'POST', body: uploadForm(file, { ...options, documentId }) }))
 }
 
-export function uploadDocumentFile(file, documentId = '', options = {}) {
-  return request('/documents/file', { method: 'POST', body: uploadForm(file, { ...options, documentId }) })
+export async function uploadDocumentFile(file, documentId = '', options = {}) {
+  return enrichUploadPayload(await requestWithMeta('/documents/file', { method: 'POST', body: uploadForm(file, { ...options, documentId }) }))
 }
 
 export const uploadFileDocument = uploadDocumentFile
@@ -119,7 +150,6 @@ export function uploadDocumentBytes({
   documentId,
   metadata,
   createdBy,
-  userId,
   checksum,
   idempotencyKey,
   idempotencyScope,
@@ -133,7 +163,6 @@ export function uploadDocumentBytes({
     document_id: documentId,
     metadata,
     created_by: createdBy,
-    user_id: userId,
     checksum,
     idempotency_key: idempotencyKey,
     idempotency_scope: idempotencyScope,
@@ -141,7 +170,7 @@ export function uploadDocumentBytes({
   Object.entries(optionalFields).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') body[key] = value
   })
-  return request('/documents/bytes', { method: 'POST', body: JSON.stringify(body) })
+  return requestWithMeta('/documents/bytes', { method: 'POST', body: JSON.stringify(body) }).then(enrichUploadPayload)
 }
 
 export const uploadBytesDocument = uploadDocumentBytes
@@ -162,7 +191,7 @@ export function getDocumentContentUrl(documentId, { mode = 'inline', chunkSize, 
   if (!suffixes[mode]) throw new RangeError(`Unsupported document content mode: ${mode}`)
   return `${API_BASE_URL}${documentPath(documentId, suffixes[mode])}${queryString({
     chunk_size: ['download', 'async', 'chunks', 'copy'].includes(mode) ? chunkSize : undefined,
-    verify_checksum: mode === 'copy' && verifyChecksum !== undefined ? verifyChecksum : undefined,
+    verify_checksum: mode === 'copy' ? verifyChecksum ?? true : undefined,
   })}`
 }
 
@@ -207,13 +236,22 @@ async function getBinary(documentId, options = {}) {
   return response
 }
 
+function binaryResponseHeaders(response) {
+  return {
+    contentType: response.headers.get('content-type') || '',
+    contentLength: response.headers.get('content-length') || '',
+    contentDisposition: response.headers.get('content-disposition') || '',
+    checksum: response.headers.get('X-Document-Checksum') || '',
+    checksumVerified: response.headers.get('X-Checksum-Verified') || '',
+    correlationId: response.headers.get('X-Correlation-ID') || '',
+  }
+}
+
 export async function readDocumentContent(documentId, options = {}) {
   const response = await getBinary(documentId, options)
   return {
     blob: await response.blob(),
-    checksum: response.headers.get('X-Document-Checksum') || '',
-    checksumVerified: response.headers.get('X-Checksum-Verified') || '',
-    contentType: response.headers.get('content-type') || '',
+    ...binaryResponseHeaders(response),
   }
 }
 
@@ -232,8 +270,7 @@ export async function downloadDocument(documentId, filename, options = {}) {
   URL.revokeObjectURL(objectUrl)
   return {
     filename: resolvedFilename,
-    checksum: response.headers.get('X-Document-Checksum') || '',
-    checksumVerified: response.headers.get('X-Checksum-Verified') || '',
+    ...binaryResponseHeaders(response),
   }
 }
 
@@ -255,6 +292,101 @@ export function getUploadOperation(idempotencyKey, scope = '') {
   return request(`/upload-operations/${encodeURIComponent(idempotencyKey)}${queryString({ scope })}`)
 }
 
+export function getManagementMetadata(documentId) {
+  return request(`/management/documents/${encodeURIComponent(documentId)}/metadata`)
+}
+
+export function getDocumentInspection(documentId) {
+  return request(`/management/documents/${encodeURIComponent(documentId)}/inspection`)
+}
+
+export function listRecoveryCandidates({ status = '', offset = 0, limit = 100 } = {}) {
+  return request(`/management/recovery-candidates${queryString({ status, offset, limit })}`)
+}
+
+export function getRecoveryCandidateIterator({ status = '', pageSize = 100 } = {}) {
+  return request(`/management/recovery-candidates/iterator${queryString({ status, page_size: pageSize })}`)
+}
+
+export function reconcileDocument(documentId, {
+  action,
+  storageKey,
+  dryRun = false,
+  actor,
+} = {}) {
+  const body = { action, dry_run: Boolean(dryRun) }
+  if (storageKey !== undefined && storageKey !== '') body.storage_key = storageKey
+  if (actor !== undefined && actor !== '') body.actor = actor
+  return request(`/management/documents/${encodeURIComponent(documentId)}/reconciliations`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function reconcileDocuments({
+  status,
+  action,
+  offset = 0,
+  limit = 100,
+  dryRun = false,
+  actor,
+} = {}) {
+  const body = {
+    status,
+    action,
+    offset,
+    limit,
+    dry_run: Boolean(dryRun),
+  }
+  if (actor !== undefined && actor !== '') body.actor = actor
+  return request('/management/reconciliations', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function executeReconciliationPlan({ status, action, items = [], actor } = {}) {
+  const body = {
+    status,
+    action,
+    items: items.map((item) => {
+      const mapped = {
+        document_id: item.documentId ?? item.document_id,
+        action: item.action,
+      }
+      const storageKey = item.storageKey ?? item.storage_key
+      if (storageKey !== undefined && storageKey !== '') mapped.storage_key = storageKey
+      return mapped
+    }),
+  }
+  if (actor !== undefined && actor !== '') body.actor = actor
+  return request('/management/reconciliation-plans/executions', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function clearAllData() {
+  return request('/management/data', { method: 'DELETE' })
+}
+
+export function initializeData() {
+  return request('/management/data/initializations', { method: 'POST' })
+}
+
+export function clearPartitionData() {
+  return request('/management/data/partition', { method: 'DELETE' })
+}
+
+export function initializePartitionData() {
+  return request('/management/data/partition/initializations', { method: 'POST' })
+}
+
+export const getInternalDocumentMetadata = getManagementMetadata
+export const inspectDocument = getDocumentInspection
+export const getRecoveryCandidates = listRecoveryCandidates
+export const getRecoveryCandidatesIterator = getRecoveryCandidateIterator
+
 export function getReadiness() {
   return request('/health/readiness')
 }
@@ -265,4 +397,9 @@ export function getLiveness() {
 
 export function getOpenApiDocument() {
   return request('/openapi.json')
+}
+
+export function getSupportUrl(pathname) {
+  const path = String(pathname || '').startsWith('/') ? pathname : `/${pathname}`
+  return `${API_BASE_URL}${path}`
 }

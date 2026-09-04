@@ -139,4 +139,89 @@ describe('DocMesh document workspace', () => {
     await waitFor(() => expect(screen.getByText('quarterly-report.docx')).toBeInTheDocument())
     expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/documents'), expect.objectContaining({ method: 'POST' }))
   })
+
+  it('lets the workspace choose cursor, page, and iterator list facades', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('service-contract.pdf')
+    await user.click(screen.getByRole('button', { name: '페이지 목록' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/documents/page'), expect.anything()))
+
+    await user.click(screen.getByRole('button', { name: 'Iterator 목록' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/documents/iterator'), expect.anything()))
+  })
+
+  it('supports bytes uploads with operation lookup from the upload panel', async () => {
+    const user = userEvent.setup()
+    let uploadRequest
+    globalThis.fetch = vi.fn((url, options = {}) => {
+      if (String(url).includes('/health/readiness')) return jsonResponse({ status: 'ok', ok: true })
+      if (String(url).includes('/upload-operations/')) return jsonResponse({ state: 'succeeded', idempotency_key: 'operation-1' })
+      if (options.method === 'POST') {
+        uploadRequest = options
+        return jsonResponse({ ...documents[0], document_id: 'doc-bytes', original_filename: 'bytes.txt' }, 201)
+      }
+      return jsonResponse({ items: documents, next_cursor: null, has_more: false })
+    })
+
+    render(<App />)
+    const input = await screen.findByLabelText('문서 파일 선택')
+    await user.upload(input, new File(['bytes body'], 'bytes.txt', { type: 'text/plain' }))
+    await user.selectOptions(screen.getByLabelText('업로드 방식'), 'bytes')
+    await user.type(screen.getByLabelText('Idempotency key'), 'operation-1')
+    await user.click(screen.getByRole('button', { name: /업로드 시작/i }))
+
+    await waitFor(() => expect(uploadRequest).toBeTruthy())
+    expect(JSON.parse(uploadRequest.body)).toMatchObject({ filename: 'bytes.txt', content_type: 'text/plain', idempotency_key: 'operation-1' })
+    expect(screen.getByText('작업 조회')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '작업 조회' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/upload-operations/operation-1'), expect.anything()))
+  })
+
+  it('loads every binary content variant and keeps verification details visible', async () => {
+    const user = userEvent.setup()
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:doc-preview')
+    globalThis.URL.revokeObjectURL = vi.fn()
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/health/readiness')) return jsonResponse({ status: 'ok', ok: true })
+      if (String(url).includes('/content') || String(url).includes('/chunks') || String(url).includes('/copy')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({
+            'content-type': 'text/plain',
+            'content-length': '12',
+            'content-disposition': 'inline; filename="service-contract.pdf"',
+            'x-document-checksum': 'sha256:abc',
+            'x-checksum-verified': 'true',
+          }),
+          blob: () => Promise.resolve(new Blob(['preview body'], { type: 'text/plain' })),
+        })
+      }
+      return jsonResponse({ items: documents, next_cursor: null, has_more: false })
+    })
+
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: /service-contract\.pdf 상세 보기/i }))
+    for (const mode of ['inline', 'eager', 'async', 'chunks', 'copy']) {
+      await user.click(screen.getByRole('button', { name: `${mode} 콘텐츠 불러오기` }))
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining(`/documents/doc-contract/${mode === 'inline' ? 'content' : mode === 'eager' ? 'content/eager' : mode === 'async' ? 'content/async' : mode}`), expect.objectContaining({ headers: { Accept: '*/*' } })))
+    }
+
+    expect(await screen.findByText('X-Checksum-Verified: true')).toBeInTheDocument()
+  })
+
+  it('exposes the operator surface only when explicitly enabled', async () => {
+    const user = userEvent.setup()
+    render(<App operatorConsoleEnabled />)
+
+    await screen.findByText('service-contract.pdf')
+    await user.click(screen.getByRole('button', { name: '운영자 콘솔' }))
+    expect(screen.getByRole('heading', { name: '운영자 / 복구' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('운영 문서 ID'), 'doc-contract')
+    await user.click(screen.getByRole('button', { name: '내부 metadata 조회' }))
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/management/documents/doc-contract/metadata'), expect.anything()))
+  })
 })
